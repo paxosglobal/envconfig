@@ -180,8 +180,38 @@ func CheckDisallowed(prefix string, spec interface{}) error {
 	return nil
 }
 
-// Process populates the specified struct based on environment variables
-func Process(prefix string, spec interface{}) error {
+type Lookuper interface {
+	Lookup(key string) (string, bool)
+}
+
+type osLookuper struct{}
+
+func (o *osLookuper) Lookup(key string) (string, bool) {
+	return lookupEnv(key)
+}
+
+// OsLookuper returns a lookuper that uses the environment (os.LookupEnv) to
+// resolve values.
+func OsLookuper() Lookuper {
+	return new(osLookuper)
+}
+
+type mapLookuper map[string]string
+
+func (m mapLookuper) Lookup(key string) (string, bool) {
+	v, ok := m[key]
+	return v, ok
+}
+
+// MapLookuper looks up environment configuration from a provided map. This is
+// useful for testing, especially in parallel, since it does not require you to
+// mutate the parent environment (which is stateful).
+func MapLookuper(m map[string]string) Lookuper {
+	return mapLookuper(m)
+}
+
+// ProcessWith populates the specified struct based from Lookuper
+func ProcessWith(prefix string, spec interface{}, l Lookuper) error {
 	infos, err := gatherInfo(prefix, spec)
 
 	for _, info := range infos {
@@ -190,9 +220,9 @@ func Process(prefix string, spec interface{}) error {
 		// and an unset value. `os.LookupEnv` is preferred to `syscall.Getenv`,
 		// but it is only available in go1.5 or newer. We're using Go build tags
 		// here to use os.LookupEnv for >=go1.5
-		value, ok := lookupEnv(info.Key)
+		value, ok := l.Lookup(info.Key)
 		if !ok && info.Alt != "" {
-			value, ok = lookupEnv(info.Alt)
+			value, ok = l.Lookup(info.Alt)
 		}
 
 		def := info.Tags.Get("default")
@@ -227,9 +257,21 @@ func Process(prefix string, spec interface{}) error {
 	return err
 }
 
+// Process populates the specified struct based on environment variables
+func Process(prefix string, spec interface{}) error {
+	return ProcessWith(prefix, spec, OsLookuper())
+}
+
 // MustProcess is the same as Process but panics if an error occurs
 func MustProcess(prefix string, spec interface{}) {
 	if err := Process(prefix, spec); err != nil {
+		panic(err)
+	}
+}
+
+// MustProcessWith is the same as ProcessWith but panics if an error occurs
+func MustProcessWith(prefix string, spec interface{}, l Lookuper) {
+	if err := ProcessWith(prefix, spec, l); err != nil {
 		panic(err)
 	}
 }
