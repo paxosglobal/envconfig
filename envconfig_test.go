@@ -497,6 +497,38 @@ func TestEmptyMapFieldOverride(t *testing.T) {
 	}
 }
 
+func TestMapFieldWhitespaceTrimmed(t *testing.T) {
+	// YAML folded block scalars (>-) fold newlines into spaces, so a multi-line
+	// map value arrives with whitespace around the entries and around the
+	// key/value separator. Every variation below must yield the same map.
+	for name, value := range map[string]string{
+		"space after comma":       "red:1, green:2, blue:3",
+		"space around colon":      "red : 1,green : 2,blue : 3",
+		"leading/trailing spaces": "  red:1 , green:2 , blue:3  ",
+	} {
+		t.Run(name, func(t *testing.T) {
+			var s Specification
+			os.Clearenv()
+			os.Setenv("ENV_CONFIG_REQUIREDVAR", "foo")
+			os.Setenv("ENV_CONFIG_COLORCODES", value)
+			if err := Process("env_config", &s); err != nil {
+				t.Fatal(err.Error())
+			}
+
+			if len(s.ColorCodes) != 3 ||
+				s.ColorCodes["red"] != 1 ||
+				s.ColorCodes["green"] != 2 ||
+				s.ColorCodes["blue"] != 3 {
+				t.Errorf(
+					"expected %#v, got %#v",
+					map[string]int{"red": 1, "green": 2, "blue": 3},
+					s.ColorCodes,
+				)
+			}
+		})
+	}
+}
+
 func TestMustProcess(t *testing.T) {
 	var s Specification
 	os.Clearenv()
@@ -794,7 +826,7 @@ func TestCheckDisallowedIgnored(t *testing.T) {
 
 func TestErrorMessageForRequiredAltVar(t *testing.T) {
 	var s struct {
-		Foo    string `envconfig:"BAR" required:"true"`
+		Foo string `envconfig:"BAR" required:"true"`
 	}
 
 	os.Clearenv()

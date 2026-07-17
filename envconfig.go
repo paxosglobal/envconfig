@@ -367,13 +367,19 @@ func processField(value string, field reflect.Value) error {
 				if len(kvpair) != 2 {
 					return fmt.Errorf("invalid map item: %q", pair)
 				}
+				// Trim whitespace around the key and value so map entries survive
+				// being split across lines in a config source. YAML folded block
+				// scalars (>-) fold newlines into spaces, turning "a:1,\n  b:2" into
+				// "a:1, b:2"; without trimming, the leading space makes " b" a
+				// distinct (wrong) key. Scalar/slice fields already tolerate this via
+				// ParseInt/ParseBool etc., so this brings maps to parity.
 				k := reflect.New(typ.Key()).Elem()
-				err := processField(kvpair[0], k)
+				err := processField(strings.TrimSpace(kvpair[0]), k)
 				if err != nil {
 					return err
 				}
 				v := reflect.New(typ.Elem()).Elem()
-				err = processField(kvpair[1], v)
+				err = processField(strings.TrimSpace(kvpair[1]), v)
 				if err != nil {
 					return err
 				}
