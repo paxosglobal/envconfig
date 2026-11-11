@@ -229,3 +229,4 @@ type SMSProviderConfig struct {
 
 Also, envconfig will use a `Set(string) error` method like from the
 [flag.Value](https://godoc.org/flag#Value) interface if implemented.
+<!-- hoplites review smoke test -->
